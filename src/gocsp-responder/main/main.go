@@ -8,10 +8,13 @@ import (
 
 func main() {
 	resp := responder.Responder()
-	flag.StringVar(&resp.IndexFile, "index", resp.IndexFile, "the CA index filename")
-	flag.StringVar(&resp.CaCertFile, "cacert", resp.CaCertFile, "the CA certificate filename")
-	flag.StringVar(&resp.RespCertFile, "rcert", resp.RespCertFile, "the responder certificate filename")
-	flag.StringVar(&resp.RespKeyFile, "rkey", resp.RespKeyFile, "the responder key filename")
+	flag.StringVar(&resp.IndexFile, "index", resp.IndexFile, "CA index filename")
+	flag.StringVar(&resp.CaCertFile, "cacert", resp.CaCertFile, "CA certificate filename")
+	flag.StringVar(&resp.RespCertFile, "rcert", resp.RespCertFile, "responder certificate filename")
+	flag.StringVar(&resp.RespKeyFile, "rkey", resp.RespKeyFile, "responder key filename")
+	flag.StringVar(&resp.Address, "bind", resp.Address, "bind address")
+	flag.IntVar(&resp.Port, "port", resp.Port, "listening port")
+	flag.BoolVar(&resp.Ssl, "ssl", resp.Ssl, "use SSL")
 	flag.Parse()
 	resp.Serve()
 }

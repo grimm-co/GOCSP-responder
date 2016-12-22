@@ -167,23 +167,24 @@ func parseKeyFile(filename string) (interface{}, error) {
 
 //takes the der encoded ocsp request and verifies it
 func (self *OCSPResponder) verify(rawreq []byte) ([]byte, error) {
+	var status int
 	req, err := ocsp.ParseRequest(rawreq)
 	if err != nil {
 		return nil, err
 	}
 	ent, err := self.getIndexEntry(req.SerialNumber.Uint64())
 	if err != nil {
-		//cert not found status response is ocsp.Unknown
-		return nil, err
-	}
-	log.Print(ent)
-
-	var status int
-	if ent.Status == StatusRevoked {
-		status = ocsp.Revoked
-		fmt.Println("This certificate is revoked!")
+		status = ocsp.Unknown
 	} else {
-		status = ocsp.Good
+		log.Print(ent)
+
+		if ent.Status == StatusRevoked {
+			status = ocsp.Revoked
+			log.Print("This certificate is revoked!")
+		} else if ent.Status == StatusValid {
+			status = ocsp.Good
+			log.Print("This certificate is valid!")
+		}
 	}
 
 	keyi, err := parseKeyFile(self.RespKeyFile)
@@ -202,9 +203,9 @@ func (self *OCSPResponder) verify(rawreq []byte) ([]byte, error) {
 		SerialNumber:     req.SerialNumber,
 		Certificate:      self.RespCert,
 		RevocationReason: ocsp.Unspecified,
-		RevokedAt:        now.AddDate(0, -1, 0), //get real date later...
-		ThisUpdate:       now.AddDate(0, -2, 0),
-		NextUpdate:       now.AddDate(0, 30, 0),
+		RevokedAt:        now.AddDate(0, 0, -1), //get real date later...
+		ThisUpdate:       now.AddDate(0, 0, -2),
+		NextUpdate:       now.AddDate(0, 0, 30),
 		ExtraExtensions:  nil,
 	}
 
