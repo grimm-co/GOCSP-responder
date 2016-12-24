@@ -5,11 +5,13 @@ The two other options are:
 1. openssl ocsp - does not support GET (safari) and dies on a request it does not understand  
 2. openca-ocspd - has memory corruption bugs.  
 
-It's a pretty simple protocol wrapped in HTTP.
+It's a pretty simple protocol wrapped in HTTP.  
+
+Refer to RFC 6960: https://tools.ietf.org/html/rfc6960
 
 Building
 --------
-This was confirmed building with Go 1.7rc6. 1.6 may or may not work. Don't say I didn't warn you :)
+This was confirmed building with Go 1.7rc6. 1.6 may or may not work. Don't say I didn't warn you :)  
 
 1. Clone the repo  
 2. cd into repo  
@@ -22,12 +24,12 @@ Features
 - Meant to work seamlessly with easy-rsa  
 - Nonce extension supported (will implement more if needed)  
 - SSL support (not recommended)  
-- It works and doesn't have memory corruption bugs \*cough\*openca-ocspd\*cough\*  
+- It works and doesn't have memory corruption bugs \*cough\* *openca-ocspd* \*cough\*  
 
 Limitations
 -----------
-- Doesn't work with the out of the box crypto/ocsp library. I had to make some modifications for extensions.
 - Only works with RSA keys (I think)
+- Only PKCS1 (for keys) and PEM (for certs) supported. These are easy-rsa defaults
   
 Tests
 -----
@@ -47,3 +49,7 @@ Options
 | -ssl     | false                          | Use SSL to serve. This is not widely supported and not recommended                                                         |
 | -stdout  | false                          | Log to stdout and not the specified log file                                                                               |
 | -strict  | false                          | Ensure Content-Type is application/ocsp-request in requests. Drop request if not. Some browsers (safari) don't supply this |
+
+Notes
+-----
+The ocsp class is pretty much exactly copied from the golang.org/x/crypto/ocsp package. It had to be modified to support extensions so I just copied it in.  I may submit a change request for their ocsp class at some point but for now it is modified for this package and included. 
