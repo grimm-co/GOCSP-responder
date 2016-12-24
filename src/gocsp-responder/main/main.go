@@ -14,7 +14,7 @@ func main() {
 	flag.StringVar(&resp.LogFile, "logfile", resp.LogFile, "file to log to")
 	flag.StringVar(&resp.Address, "bind", resp.Address, "bind address")
 	flag.IntVar(&resp.Port, "port", resp.Port, "listening port")
-	flag.BoolVar(&resp.Ssl, "ssl", resp.Ssl, "use SSL")
+	flag.BoolVar(&resp.Ssl, "ssl", resp.Ssl, "use SSL, this is not widely supported and not recommended")
 	flag.BoolVar(&resp.Strict, "strict", resp.Strict, "Require content type HTTP header")
 	flag.BoolVar(&resp.LogToStdout, "stdout", resp.LogToStdout, "log to stdout, not the log file")
 	flag.Parse()

@@ -5,11 +5,13 @@ import (
 	"bytes"
 	"crypto"
 	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/base64"
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"golang.org/x/crypto/ocsp"
+	"gocsp-responder/crypto/ocsp"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -150,7 +152,7 @@ func (self *OCSPResponder) parseIndex() error {
 }
 
 func (self *OCSPResponder) getIndexEntry(s uint64) (*IndexEntry, error) {
-
+	log.Println(fmt.Sprintf("Looking for serial %x", s))
 	if err := self.parseIndex(); err != nil {
 		return nil, err
 	}
@@ -191,11 +193,22 @@ func parseKeyFile(filename string) (interface{}, error) {
 	return key, nil
 }
 
+func checkForNonceExtension(exts []pkix.Extension) *pkix.Extension {
+	nonce_oid := asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 48, 1, 2}
+	for _, ext := range exts {
+		if ext.Id.Equal(nonce_oid) {
+			log.Println("Detected nonce extension")
+			return &ext
+		}
+	}
+	return nil
+}
+
 //takes the der encoded ocsp request and verifies it
 func (self *OCSPResponder) verify(rawreq []byte) ([]byte, error) {
 	var status int
 	var revokedAt time.Time
-	req, err := ocsp.ParseRequest(rawreq)
+	req, exts, err := ocsp.ParseRequest(rawreq)
 	if err != nil {
 		log.Println(err)
 		return nil, err
@@ -227,15 +240,22 @@ func (self *OCSPResponder) verify(rawreq []byte) ([]byte, error) {
 		return nil, errors.New("Could not make key a signer")
 	}
 
+	var responseExtensions []pkix.Extension
+	nonce := checkForNonceExtension(exts)
+	if nonce != nil {
+		responseExtensions = append(responseExtensions, *nonce)
+	}
+
 	rtemplate := ocsp.Response{
 		Status:           status,
 		SerialNumber:     req.SerialNumber,
 		Certificate:      self.RespCert,
 		RevocationReason: ocsp.Unspecified,
+		IssuerHash:       req.HashAlgorithm,
 		RevokedAt:        revokedAt,
 		ThisUpdate:       self.IndexModTime,
 		NextUpdate:       time.Now().AddDate(0, 0, 30), //adding 30 days to the current date. This ocsp library sets the default date to epoch which makes ocsp clients freak out.
-		ExtraExtensions:  nil,
+		Extensions:       exts,
 	}
 
 	resp, err := ocsp.CreateResponse(self.CaCert, self.RespCert, rtemplate, key)
@@ -273,7 +293,13 @@ func (self *OCSPResponder) Serve() error {
 
 	handler := self.makeHandler()
 	http.HandleFunc("/", handler)
-	log.Println(fmt.Sprintf("GOCSP-Responder starting on %s:%d", self.Address, self.Port))
-	http.ListenAndServe(fmt.Sprintf("%s:%d", self.Address, self.Port), nil)
+	listenOn := fmt.Sprintf("%s:%d", self.Address, self.Port)
+	log.Println(fmt.Sprintf("GOCSP-Responder starting on %s with SSL:%t", listenOn, self.Ssl))
+
+	if self.Ssl {
+		http.ListenAndServeTLS(listenOn, self.RespCertFile, self.RespKeyFile, nil)
+	} else {
+		http.ListenAndServe(listenOn, nil)
+	}
 	return nil
 }
