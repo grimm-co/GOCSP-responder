@@ -1,3 +1,8 @@
+// Copyright 2016 SMFS Inc. DBA GRIMM. All rights reserved.
+// Use of this source code is governed by the MIT
+// license that can be found in the LICENSE file.
+
+// Implementation of an OCSP responder defined by RFC 6960
 package responder
 
 import (
@@ -38,6 +43,7 @@ type OCSPResponder struct {
 	RespCert     *x509.Certificate
 }
 
+// I decided on these defaults based on what I was using
 func Responder() *OCSPResponder {
 	return &OCSPResponder{
 		IndexFile:    "index.txt",
@@ -57,6 +63,7 @@ func Responder() *OCSPResponder {
 	}
 }
 
+// Creates an OCSP http handler and returns it
 func (self *OCSPResponder) makeHandler() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Print(fmt.Sprintf("Got %s request from %s", r.Method, r.RemoteAddr))
@@ -70,17 +77,23 @@ func (self *OCSPResponder) makeHandler() func(w http.ResponseWriter, r *http.Req
 		case "POST":
 			b.ReadFrom(r.Body)
 		case "GET":
-			gd, _ := base64.StdEncoding.DecodeString(r.URL.Path[1:])
+			gd, err := base64.StdEncoding.DecodeString(r.URL.Path[1:])
+			if err != nil {
+				log.Println(err)
+				return
+			}
 			b.Read(gd)
 		default:
 			log.Println("Unsupported request method")
 			return
 		}
 
+		// parse request, verify, create response
 		w.Header().Set("Content-Type", "application/ocsp-response")
 		resp, err := self.verify(b.Bytes())
 		if err != nil {
 			log.Print(err)
+			// technically we should return an ocsp error response. but this is probably fine
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -89,7 +102,7 @@ func (self *OCSPResponder) makeHandler() func(w http.ResponseWriter, r *http.Req
 	}
 }
 
-//I only know of two types, but more can be added later
+// I only know of two types, but more can be added later
 const (
 	StatusValid   = 'V'
 	StatusRevoked = 'R'
@@ -97,40 +110,42 @@ const (
 )
 
 type IndexEntry struct {
-	Status            byte
-	Serial            uint64 //this probably should be a big.Int but I don't see how it would get bigger than a 64 byte int
+	Status byte
+	Serial uint64 // this probably should be a big.Int but I don't see how it would get bigger than a 64 byte int
+	// revocation reason may need to be added
 	IssueTime         time.Time
 	RevocationTime    time.Time
 	DistinguishedName string
 }
 
-//function to parse the index file
+// function to parse the index file
 func (self *OCSPResponder) parseIndex() error {
 	var t string = "060102150405Z"
 	finfo, err := os.Stat(self.IndexFile)
 	if err == nil {
+		// if the file modtime has changed, then reload the index file
 		if finfo.ModTime().After(self.IndexModTime) {
 			log.Print("Index has changed. Updating")
 			self.IndexModTime = finfo.ModTime()
-			//clear index entries
+			// clear index entries
 			self.IndexEntries = self.IndexEntries[:0]
 		} else {
+			// the index has not changed. just return
 			return nil
 		}
 	} else {
 		return err
 	}
+
+	// open and parse the index file
 	if file, err := os.Open(self.IndexFile); err == nil {
 		defer file.Close()
-		//if we can open it we should be able to stat it
 		s := bufio.NewScanner(file)
 		for s.Scan() {
 			var ie IndexEntry
 			ln := strings.Fields(s.Text())
-			//probably check for error
 			ie.Status = []byte(ln[0])[0]
 			ie.IssueTime, _ = time.Parse(t, ln[1])
-			//handle strconv errors later
 			if ie.Status == StatusValid {
 				ie.Serial, _ = strconv.ParseUint(ln[2], 16, 64)
 				ie.DistinguishedName = ln[4]
@@ -140,7 +155,7 @@ func (self *OCSPResponder) parseIndex() error {
 				ie.DistinguishedName = ln[5]
 				ie.RevocationTime, _ = time.Parse(t, ln[2])
 			} else {
-				//invalid status or bad line. just carry on
+				// invalid status or bad line. just carry on
 				continue
 			}
 			self.IndexEntries = append(self.IndexEntries, ie)
@@ -151,6 +166,8 @@ func (self *OCSPResponder) parseIndex() error {
 	return nil
 }
 
+// updates the index if necessary and then searches for the given index in the
+// index list
 func (self *OCSPResponder) getIndexEntry(s uint64) (*IndexEntry, error) {
 	log.Println(fmt.Sprintf("Looking for serial %x", s))
 	if err := self.parseIndex(); err != nil {
@@ -164,11 +181,10 @@ func (self *OCSPResponder) getIndexEntry(s uint64) (*IndexEntry, error) {
 	return nil, errors.New(fmt.Sprintf("Serial 0x%x not found", s))
 }
 
-//function to get and hash the CA cert public key
+// parses a pem encoded x509 certificate
 func parseCertFile(filename string) (*x509.Certificate, error) {
 	ct, err := ioutil.ReadFile(filename)
 	if err != nil {
-		//print out error message here
 		return nil, err
 	}
 	block, _ := pem.Decode(ct)
@@ -179,10 +195,10 @@ func parseCertFile(filename string) (*x509.Certificate, error) {
 	return cert, nil
 }
 
+// parses a PEM encoded PKCS8 private key (RSA only)
 func parseKeyFile(filename string) (interface{}, error) {
 	kt, err := ioutil.ReadFile(filename)
 	if err != nil {
-		//print out error message here
 		return nil, err
 	}
 	block, _ := pem.Decode(kt)
@@ -193,6 +209,7 @@ func parseKeyFile(filename string) (interface{}, error) {
 	return key, nil
 }
 
+// takes a list of extensions and returns the nonce extension if it is present
 func checkForNonceExtension(exts []pkix.Extension) *pkix.Extension {
 	nonce_oid := asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 48, 1, 2}
 	for _, ext := range exts {
@@ -204,15 +221,19 @@ func checkForNonceExtension(exts []pkix.Extension) *pkix.Extension {
 	return nil
 }
 
-//takes the der encoded ocsp request and verifies it
+// takes the der encoded ocsp request, verifies it, and creates a response
 func (self *OCSPResponder) verify(rawreq []byte) ([]byte, error) {
 	var status int
 	var revokedAt time.Time
+
+	// parse the request
 	req, exts, err := ocsp.ParseRequest(rawreq)
 	if err != nil {
 		log.Println(err)
 		return nil, err
 	}
+
+	// get the index entry, if it exists
 	ent, err := self.getIndexEntry(req.SerialNumber.Uint64())
 	if err != nil {
 		log.Println(err)
@@ -229,23 +250,25 @@ func (self *OCSPResponder) verify(rawreq []byte) ([]byte, error) {
 		}
 	}
 
-	//perhaps I should zero this out after use
+	// parse key file
+	// perhaps I should zero this out after use
 	keyi, err := parseKeyFile(self.RespKeyFile)
 	if err != nil {
 		return nil, err
 	}
-
 	key, ok := keyi.(crypto.Signer)
 	if !ok {
 		return nil, errors.New("Could not make key a signer")
 	}
 
+	// check for nonce extension
 	var responseExtensions []pkix.Extension
 	nonce := checkForNonceExtension(exts)
 	if nonce != nil {
 		responseExtensions = append(responseExtensions, *nonce)
 	}
 
+	// construct response template
 	rtemplate := ocsp.Response{
 		Status:           status,
 		SerialNumber:     req.SerialNumber,
@@ -258,6 +281,7 @@ func (self *OCSPResponder) verify(rawreq []byte) ([]byte, error) {
 		Extensions:       exts,
 	}
 
+	// make a response to return
 	resp, err := ocsp.CreateResponse(self.CaCert, self.RespCert, rtemplate, key)
 	if err != nil {
 		return nil, err
@@ -266,7 +290,9 @@ func (self *OCSPResponder) verify(rawreq []byte) ([]byte, error) {
 	return resp, err
 }
 
+// setup an ocsp server instance with configured values
 func (self *OCSPResponder) Serve() error {
+	// setup logging
 	if !self.LogToStdout {
 		lf, err := os.OpenFile(self.LogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 		if err != nil {
@@ -291,6 +317,7 @@ func (self *OCSPResponder) Serve() error {
 	self.CaCert = cacert
 	self.RespCert = respcert
 
+	// get handler and serve
 	handler := self.makeHandler()
 	http.HandleFunc("/", handler)
 	listenOn := fmt.Sprintf("%s:%d", self.Address, self.Port)
