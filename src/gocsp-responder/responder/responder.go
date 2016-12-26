@@ -69,6 +69,7 @@ func (self *OCSPResponder) makeHandler() func(w http.ResponseWriter, r *http.Req
 		log.Print(fmt.Sprintf("Got %s request from %s", r.Method, r.RemoteAddr))
 		if self.Strict && r.Header.Get("Content-Type") != "application/ocsp-request" {
 			log.Println("Strict mode requires correct Content-Type header")
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
@@ -77,14 +78,18 @@ func (self *OCSPResponder) makeHandler() func(w http.ResponseWriter, r *http.Req
 		case "POST":
 			b.ReadFrom(r.Body)
 		case "GET":
+			log.Println(r.URL.Path)
 			gd, err := base64.StdEncoding.DecodeString(r.URL.Path[1:])
 			if err != nil {
 				log.Println(err)
+				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			b.Read(gd)
+			r := bytes.NewReader(gd)
+			b.ReadFrom(r)
 		default:
 			log.Println("Unsupported request method")
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
@@ -277,7 +282,7 @@ func (self *OCSPResponder) verify(rawreq []byte) ([]byte, error) {
 		IssuerHash:       req.HashAlgorithm,
 		RevokedAt:        revokedAt,
 		ThisUpdate:       self.IndexModTime,
-		NextUpdate:       time.Now().AddDate(0, 0, 30), //adding 30 days to the current date. This ocsp library sets the default date to epoch which makes ocsp clients freak out.
+		NextUpdate:       time.Now().AddDate(0, 0, 1), //adding 1 day after the current date. This ocsp library sets the default date to epoch which makes ocsp clients freak out.
 		Extensions:       exts,
 	}
 
