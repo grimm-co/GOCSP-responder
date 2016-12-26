@@ -174,7 +174,7 @@ func (self *OCSPResponder) parseIndex() error {
 // updates the index if necessary and then searches for the given index in the
 // index list
 func (self *OCSPResponder) getIndexEntry(s uint64) (*IndexEntry, error) {
-	log.Println(fmt.Sprintf("Looking for serial %x", s))
+	log.Println(fmt.Sprintf("Looking for serial 0x%x", s))
 	if err := self.parseIndex(); err != nil {
 		return nil, err
 	}
