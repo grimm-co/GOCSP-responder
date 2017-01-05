@@ -33,7 +33,7 @@ Limitations
   
 Tests
 -----
-This has been tested and working with the `openssl ocsp` command, Chrome, Firefox, and Safari.  
+This has been tested and working with the `openssl ocsp` command, Chrome 55.0.2883.95, Firefox 50.1.0, and Safari 10.0.2.  
 
 Options
 -------
