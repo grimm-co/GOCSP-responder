@@ -226,6 +226,27 @@ func checkForNonceExtension(exts []pkix.Extension) *pkix.Extension {
 	return nil
 }
 
+func (self *OCSPResponder) verifyIssuer(req *ocsp.Request) error {
+	h := req.HashAlgorithm.New()
+	h.Write(self.CaCert.RawIssuer)
+	if bytes.Compare(h.Sum(nil), req.IssuerNameHash) != 0 {
+		return errors.New("Issuer name does not match")
+	}
+	h.Reset()
+	var publicKeyInfo struct {
+		Algorithm pkix.AlgorithmIdentifier
+		PublicKey asn1.BitString
+	}
+	if _, err := asn1.Unmarshal(self.CaCert.RawSubjectPublicKeyInfo, &publicKeyInfo); err != nil {
+		return err
+	}
+	h.Write(publicKeyInfo.PublicKey.RightAlign())
+	if bytes.Compare(h.Sum(nil), req.IssuerKeyHash) != 0 {
+		return errors.New("Issuer key hash does not match")
+	}
+	return nil
+}
+
 // takes the der encoded ocsp request, verifies it, and creates a response
 func (self *OCSPResponder) verify(rawreq []byte) ([]byte, error) {
 	var status int
@@ -234,6 +255,12 @@ func (self *OCSPResponder) verify(rawreq []byte) ([]byte, error) {
 	// parse the request
 	req, exts, err := ocsp.ParseRequest(rawreq)
 	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+
+	//make sure the request is valid
+	if err := self.verifyIssuer(req); err != nil {
 		log.Println(err)
 		return nil, err
 	}
