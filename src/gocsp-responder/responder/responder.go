@@ -41,6 +41,7 @@ type OCSPResponder struct {
 	IndexModTime time.Time
 	CaCert       *x509.Certificate
 	RespCert     *x509.Certificate
+	NonceList    [][]byte
 }
 
 // I decided on these defaults based on what I was using
@@ -60,6 +61,7 @@ func Responder() *OCSPResponder {
 		IndexModTime: time.Time{},
 		CaCert:       nil,
 		RespCert:     nil,
+		NonceList:    nil,
 	}
 }
 
@@ -296,6 +298,15 @@ func (self *OCSPResponder) verify(rawreq []byte) ([]byte, error) {
 	// check for nonce extension
 	var responseExtensions []pkix.Extension
 	nonce := checkForNonceExtension(exts)
+
+	// check if the nonce has been used before
+	for _, n := range self.NonceList {
+		if bytes.Compare(n, nonce.Value) == 0 {
+			return nil, errors.New("This nonce has already been used")
+		}
+	}
+
+	self.NonceList = append(self.NonceList, nonce.Value)
 	if nonce != nil {
 		responseExtensions = append(responseExtensions, *nonce)
 	}
