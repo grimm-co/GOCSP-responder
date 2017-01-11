@@ -300,6 +300,9 @@ func (self *OCSPResponder) verify(rawreq []byte) ([]byte, error) {
 	nonce := checkForNonceExtension(exts)
 
 	// check if the nonce has been used before
+	if self.NonceList == nil {
+		self.NonceList = make([][]byte, 10)
+	}
 	for _, n := range self.NonceList {
 		if bytes.Compare(n, nonce.Value) == 0 {
 			return nil, errors.New("This nonce has already been used")
