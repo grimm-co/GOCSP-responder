@@ -323,8 +323,9 @@ func (self *OCSPResponder) verify(rawreq []byte) ([]byte, error) {
 		IssuerHash:       req.HashAlgorithm,
 		RevokedAt:        revokedAt,
 		ThisUpdate:       self.IndexModTime,
-		NextUpdate:       time.Now().AddDate(0, 0, 1), //adding 1 day after the current date. This ocsp library sets the default date to epoch which makes ocsp clients freak out.
-		Extensions:       exts,
+		//adding 1 day after the current date. This ocsp library sets the default date to epoch which makes ocsp clients freak out.
+		NextUpdate: time.Now().AddDate(0, 0, 1),
+		Extensions: exts,
 	}
 
 	// make a response to return
@@ -340,7 +341,7 @@ func (self *OCSPResponder) verify(rawreq []byte) ([]byte, error) {
 func (self *OCSPResponder) Serve() error {
 	// setup logging
 	if !self.LogToStdout {
-		lf, err := os.OpenFile(self.LogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		lf, err := os.OpenFile(self.LogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0664)
 		if err != nil {
 			log.Fatal("Could not open log file " + self.LogFile)
 		}
