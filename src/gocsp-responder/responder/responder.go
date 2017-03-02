@@ -230,7 +230,7 @@ func checkForNonceExtension(exts []pkix.Extension) *pkix.Extension {
 
 func (self *OCSPResponder) verifyIssuer(req *ocsp.Request) error {
 	h := req.HashAlgorithm.New()
-	h.Write(self.CaCert.RawIssuer)
+	h.Write(self.CaCert.RawSubject)
 	if bytes.Compare(h.Sum(nil), req.IssuerNameHash) != 0 {
 		return errors.New("Issuer name does not match")
 	}
