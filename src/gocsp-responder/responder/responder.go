@@ -303,14 +303,15 @@ func (self *OCSPResponder) verify(rawreq []byte) ([]byte, error) {
 	if self.NonceList == nil {
 		self.NonceList = make([][]byte, 10)
 	}
-	for _, n := range self.NonceList {
-		if bytes.Compare(n, nonce.Value) == 0 {
-			return nil, errors.New("This nonce has already been used")
-		}
-	}
 
-	self.NonceList = append(self.NonceList, nonce.Value)
 	if nonce != nil {
+		for _, n := range self.NonceList {
+			if bytes.Compare(n, nonce.Value) == 0 {
+				return nil, errors.New("This nonce has already been used")
+			}
+		}
+
+		self.NonceList = append(self.NonceList, nonce.Value)
 		responseExtensions = append(responseExtensions, *nonce)
 	}
 
