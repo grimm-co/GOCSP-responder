@@ -323,9 +323,9 @@ func (self *OCSPResponder) verify(rawreq []byte) ([]byte, error) {
 		RevocationReason: ocsp.Unspecified,
 		IssuerHash:       req.HashAlgorithm,
 		RevokedAt:        revokedAt,
-		ThisUpdate:       self.IndexModTime,
+		ThisUpdate:       time.Now().AddDate(0, 0, -1).UTC(),
 		//adding 1 day after the current date. This ocsp library sets the default date to epoch which makes ocsp clients freak out.
-		NextUpdate: time.Now().AddDate(0, 0, 1),
+		NextUpdate: time.Now().AddDate(0, 0, 1).UTC(),
 		Extensions: exts,
 	}
 
