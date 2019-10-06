@@ -19,9 +19,9 @@ import (
 	"gocsp-responder/crypto/ocsp"
 	"io/ioutil"
 	"log"
+	"math/big"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -118,7 +118,7 @@ const (
 
 type IndexEntry struct {
 	Status byte
-	Serial uint64 // this probably should be a big.Int but I don't see how it would get bigger than a 64 byte int
+	Serial big.Int // wow I totally called it
 	// revocation reason may need to be added
 	IssueTime         time.Time
 	RevocationTime    time.Time
@@ -154,11 +154,11 @@ func (self *OCSPResponder) parseIndex() error {
 			ie.Status = []byte(ln[0])[0]
 			ie.IssueTime, _ = time.Parse(t, ln[1])
 			if ie.Status == StatusValid {
-				ie.Serial, _ = strconv.ParseUint(ln[2], 16, 64)
+				ie.Serial, _ = new(big.Int).SetString(ln[2], 16)
 				ie.DistinguishedName = ln[4]
 				ie.RevocationTime = time.Time{} //doesn't matter
 			} else if ie.Status == StatusRevoked {
-				ie.Serial, _ = strconv.ParseUint(ln[3], 16, 64)
+				ie.Serial, _ = new(big.Int).SetString(ln[3], 16)
 				ie.DistinguishedName = ln[5]
 				ie.RevocationTime, _ = time.Parse(t, ln[2])
 			} else {
