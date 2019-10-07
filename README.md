@@ -3,7 +3,7 @@ gocsp-server
 This is a go implementation of a basic OCSP Responder.  
 The two other options are:  
 1. openssl ocsp - does not support GET (safari) and dies on a request it does not understand  
-2. openca-ocspd - has memory corruption bugs.  
+2. openca-ocspd - [has memory corruption bugs](https://github.com/openca/openca-ocspd/issues/17).  
 
 It's a pretty simple protocol wrapped in HTTP.  
 
@@ -24,7 +24,7 @@ Features
 - Meant to work seamlessly with easy-rsa  
 - Nonce extension supported (will implement more if needed)  
 - SSL support (not recommended)  
-- It works and doesn't have memory corruption bugs \*cough\* *openca-ocspd* \*cough\*  
+- It works and doesn't have memory corruption bugs \*cough\* *[openca-ocspd](https://github.com/openca/openca-ocspd/issues/17)* \*cough\*  
 
 Limitations
 -----------
