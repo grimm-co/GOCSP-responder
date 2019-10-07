@@ -181,7 +181,7 @@ func (self *OCSPResponder) getIndexEntry(s *big.Int) (*IndexEntry, error) {
 		return nil, err
 	}
 	for _, ent := range self.IndexEntries {
-		if ent.Serial == s {
+		if ent.Serial.Cmp(s) == 0 {
 			return &ent, nil
 		}
 	}
