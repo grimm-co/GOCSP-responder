@@ -118,7 +118,7 @@ const (
 
 type IndexEntry struct {
 	Status byte
-	Serial big.Int // wow I totally called it
+	Serial *big.Int // wow I totally called it
 	// revocation reason may need to be added
 	IssueTime         time.Time
 	RevocationTime    time.Time
@@ -175,7 +175,7 @@ func (self *OCSPResponder) parseIndex() error {
 
 // updates the index if necessary and then searches for the given index in the
 // index list
-func (self *OCSPResponder) getIndexEntry(s uint64) (*IndexEntry, error) {
+func (self *OCSPResponder) getIndexEntry(s *big.Int) (*IndexEntry, error) {
 	log.Println(fmt.Sprintf("Looking for serial 0x%x", s))
 	if err := self.parseIndex(); err != nil {
 		return nil, err
@@ -268,7 +268,7 @@ func (self *OCSPResponder) verify(rawreq []byte) ([]byte, error) {
 	}
 
 	// get the index entry, if it exists
-	ent, err := self.getIndexEntry(req.SerialNumber.Uint64())
+	ent, err := self.getIndexEntry(req.SerialNumber)
 	if err != nil {
 		log.Println(err)
 		status = ocsp.Unknown
