@@ -11,7 +11,7 @@ Refer to RFC 6960: https://tools.ietf.org/html/rfc6960
 
 Building
 --------
-This was confirmed building with Go 1.7rc6. 1.6 may or may not work. Don't say I didn't warn you :)  
+This was confirmed building with Go 1.10.2, thought it was originally built with 1.7rc6. Your milage may vary with other versions.  
 
 1. Clone the repo  
 2. cd into repo  
@@ -33,7 +33,7 @@ Limitations
   
 Tests
 -----
-This has been tested and working with the `openssl ocsp` command, Chrome 55.0.2883.95, Firefox 50.1.0, and Safari 10.0.2.  
+This has been tested and working with the `openssl ocsp` command, Chrome 55.0.2883.95, Firefox 50.1.0, and Safari 10.0.2. It should still work for newer versions of these browsers. I didn't test IE/Edge. If it doesn't work for those, submit an issue.  
 
 Options
 -------
