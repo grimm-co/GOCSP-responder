@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ocsp
+  labels:
+    app: ocsp
+  annotations:
+    "sidecar.jaegertracing.io/inject": "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ocsp
+  template:
+    metadata:
+      labels:
+        app: ocsp
+    spec:
+      containers:
+        - name: ocsp
+          image: ocsp-responder:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 9098
+          volumeMounts:
+            - name: ca
+              mountPath: "/ca"
+            - name: certs
+              mountPath: "/certs"
+          env:
+            - name: RESPONDER_FILE_CA
+              value: "/ca/enroller.crt"
+            - name: RESPONDER_KEY
+              value: "/certs/responder-pkcs8.key"
+            - name: RESPONDER_CERT
+              value: "/certs/responder.crt"
+            - name: RESPONDER_DB_NAME
+              value: "enroller"
+            - name: RESPONDER_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: enroller-db-secrets
+                  key: dbuser
+            - name: RESPONDER_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: enroller-db-secrets
+                  key: dbpassword
+            - name: RESPONDER_DB_HOST
+              value: "enrollerdb"
+            - name: RESPONDER_DB_PORT
+              value: "5432"
+            - name: RESPONDER_PORT
+              value: "9098"
+            - name: RESPONDER_CONSUL_PROTOCOL
+              value: "https"
+            - name: RESPONDER_CONSUL_HOST
+              value: "consul-server"
+            - name: RESPONDER_CONSUL_PORT
+              value: "8501"
+            - name: RESPONDER_CONSUL_CA
+              value: "/certs/consul.crt"
+            - name: JAEGER_SERVICE_NAME
+              value: ocsp-responder
+            - name: JAEGER_AGENT_HOST
+              value: "localhost"
+            - name: JAEGER_AGENT_PORT
+              value: "6831"
+      volumes:
+        - name: ca
+          secret:
+            secretName: ocsp-ca
+        - name: certs
+          secret:
+            secretName: ocsp-certs
