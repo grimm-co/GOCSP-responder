@@ -424,6 +424,8 @@ func ParseRequest(bytes []byte) (*Request, []pkix.Extension, error) {
 	if len(req.TBSRequest.RequestList) == 0 {
 		return nil, nil, ParseError("OCSP request contains no request body")
 	}
+	// Here takes only one certificate from the request. In case it is needed to take
+	// more certificates this should be changed.
 	innerRequest := req.TBSRequest.RequestList[0]
 
 	hashFunc := getHashAlgorithmFromOID(innerRequest.Cert.HashAlgorithm.Algorithm)
