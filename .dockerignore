@@ -1,0 +1,6 @@
+cmd
+k8s
+pkg
+go.mod
+go.sum
+provision-k8s.sh
