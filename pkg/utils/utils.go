@@ -7,7 +7,7 @@ import (
 
 const (
 	CertPEMBlockType = "CERTIFICATE"
-	KeyPEMBlockType  = "PRIVATE KEY"
+	KeyPEMBlockType  = "RSA PRIVATE KEY"
 )
 
 func CheckPEMBlock(pemBlock *pem.Block, blockType string) error {

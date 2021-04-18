@@ -59,7 +59,7 @@ func (f *file) GetResponderKey() (crypto.PrivateKey, error) {
 		return nil, err
 	}
 	level.Info(f.logger).Log("msg", "Responder key loaded")
-	key, err := x509.ParsePKCS8PrivateKey(pemBlock.Bytes)
+	key, err := x509.ParsePKCS1PrivateKey(pemBlock.Bytes)
 	if err != nil {
 		level.Error(f.logger).Log("err", err, "msg", "Could not parse Responder key")
 		return nil, err
