@@ -1,7 +1,11 @@
-package ca
+package secrets
 
-import "crypto/x509"
+type VaultService struct {
+	Secrets Secrets
+}
 
-type Secrets interface {
-	GetCACert() (*x509.Certificate, error)
+func NewVaultService(secrets Secrets) *VaultService {
+	return &VaultService{
+		Secrets: secrets,
+	}
 }

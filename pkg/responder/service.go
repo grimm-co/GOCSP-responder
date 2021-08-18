@@ -8,11 +8,11 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/lamassuiot/GOCSP-responder/pkg/crypto/ocsp"
-	"github.com/lamassuiot/GOCSP-responder/pkg/depot"
-	"github.com/lamassuiot/GOCSP-responder/pkg/secrets/ca"
+	secrets "github.com/lamassuiot/GOCSP-responder/pkg/secrets/ca"
 	"github.com/lamassuiot/GOCSP-responder/pkg/secrets/responder"
 )
 
@@ -22,10 +22,8 @@ type Service interface {
 }
 
 type OCSPResponder struct {
-	caSecrets   ca.Secrets
+	secrets     secrets.Secrets
 	respSecrets responder.Secrets
-	depot       depot.Depot
-	caCert      *x509.Certificate
 	respCert    *x509.Certificate
 	nonceList   [][]byte
 }
@@ -41,25 +39,31 @@ func checkForNonceExtension(exts []pkix.Extension) *pkix.Extension {
 	return nil
 }
 
-func (o *OCSPResponder) verifyIssuer(req *ocsp.Request) error {
-	h := req.HashAlgorithm.New()
-	h.Write(o.caCert.RawSubject)
-	if bytes.Compare(h.Sum(nil), req.IssuerNameHash) != 0 {
-		return errors.New("Issuer name does not match")
+func (o *OCSPResponder) verifyIssuer(req *ocsp.Request, cas []secrets.Cert) (secrets.Cert, error) {
+	for _, ca := range cas {
+		h := req.HashAlgorithm.New()
+		h.Write(ca.CRT.RawSubject)
+		if bytes.Compare(h.Sum(nil), req.IssuerNameHash) != 0 {
+			//return errors.New("Issuer name does not match")
+			continue
+		}
+		h.Reset()
+		var publicKeyInfo struct {
+			Algorithm pkix.AlgorithmIdentifier
+			PublicKey asn1.BitString
+		}
+		if _, err := asn1.Unmarshal(ca.CRT.RawSubjectPublicKeyInfo, &publicKeyInfo); err != nil {
+			//return err
+			continue
+		}
+		h.Write(publicKeyInfo.PublicKey.RightAlign())
+		if bytes.Compare(h.Sum(nil), req.IssuerKeyHash) != 0 {
+			//return errors.New("Issuer key hash does not match")
+			continue
+		}
+		return ca, nil
 	}
-	h.Reset()
-	var publicKeyInfo struct {
-		Algorithm pkix.AlgorithmIdentifier
-		PublicKey asn1.BitString
-	}
-	if _, err := asn1.Unmarshal(o.caCert.RawSubjectPublicKeyInfo, &publicKeyInfo); err != nil {
-		return err
-	}
-	h.Write(publicKeyInfo.PublicKey.RightAlign())
-	if bytes.Compare(h.Sum(nil), req.IssuerKeyHash) != 0 {
-		return errors.New("Issuer key hash does not match")
-	}
-	return nil
+	return secrets.Cert{}, errors.New("Could no verify the cert's Issuer. No matching issuer found")
 }
 
 func (o *OCSPResponder) Health(ctx context.Context) bool {
@@ -76,20 +80,33 @@ func (o *OCSPResponder) Verify(ctx context.Context, msg []byte) ([]byte, error) 
 		return nil, err
 	}
 
+	cas, err := o.secrets.GetCAs()
+	if err != nil {
+		return nil, errors.New("Could not get CAs")
+	}
 	//make sure the request is valid
-	if err := o.verifyIssuer(req); err != nil {
+	issuerCA, err := o.verifyIssuer(req, cas)
+	if err != nil {
 		return nil, err
 	}
 
-	// get the index entry, if it exists
-	ent, err := o.depot.GetIndexEntry(req.SerialNumber)
+	if issuerCA.Status != secrets.StatusValid {
+		fmt.Println("Issuing CA is not valid")
+	}
+
+	cert, err := o.secrets.GetCertBigInt(issuerCA.CaName, req.SerialNumber)
+	if err != nil {
+		return nil, errors.New("Could not get certificate")
+	}
+
 	if err != nil {
 		status = ocsp.Unknown
 	} else {
-		if ent.Status == depot.StatusRevoked {
+		if cert.Status == secrets.StatusRevoked || cert.Status == secrets.StatusExpired {
 			status = ocsp.Revoked
-			revokedAt = ent.RevocationTime
-		} else if ent.Status == depot.StatusValid {
+			tm := time.Unix(cert.RevocationTime, 0)
+			revokedAt = tm
+		} else if cert.Status == secrets.StatusValid {
 			status = ocsp.Good
 		}
 	}
@@ -140,28 +157,24 @@ func (o *OCSPResponder) Verify(ctx context.Context, msg []byte) ([]byte, error) 
 	}
 
 	// make a response to return
-	resp, err := ocsp.CreateResponse(o.caCert, o.respCert, rtemplate, key)
+	resp, err := ocsp.CreateResponse(&issuerCA.CRT, o.respCert, rtemplate, key)
 	if err != nil {
 		return nil, err
 	}
 	return resp, nil
+
 }
 
-func NewService(caSecrets ca.Secrets, respSecrets responder.Secrets, depot depot.Depot) (Service, error) {
+func NewService(respSecrets responder.Secrets, secrets secrets.Secrets) (Service, error) {
 	//the certs should not change, so lets keep them in memory
-	cacert, err := caSecrets.GetCACert()
-	if err != nil {
-		return nil, err
-	}
+
 	respcert, err := respSecrets.GetResponderCert()
 	if err != nil {
 		return nil, err
 	}
 	responder := &OCSPResponder{
-		caSecrets:   caSecrets,
+		secrets:     secrets,
 		respSecrets: respSecrets,
-		depot:       depot,
-		caCert:      cacert,
 		respCert:    respcert,
 	}
 

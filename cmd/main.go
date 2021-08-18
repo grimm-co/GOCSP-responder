@@ -12,15 +12,14 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/lamassuiot/GOCSP-responder/pkg/depot/relational"
-	"github.com/lamassuiot/GOCSP-responder/pkg/discovery/consul"
-	"github.com/lamassuiot/GOCSP-responder/pkg/responder"
-	cafile "github.com/lamassuiot/GOCSP-responder/pkg/secrets/ca/file"
-	"github.com/lamassuiot/GOCSP-responder/pkg/secrets/responder/file"
-
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	kitprometheus "github.com/go-kit/kit/metrics/prometheus"
+	"github.com/lamassuiot/GOCSP-responder/pkg/discovery/consul"
+	"github.com/lamassuiot/GOCSP-responder/pkg/responder"
+	secrets "github.com/lamassuiot/GOCSP-responder/pkg/secrets/ca"
+	"github.com/lamassuiot/GOCSP-responder/pkg/secrets/ca/vault"
+	"github.com/lamassuiot/GOCSP-responder/pkg/secrets/responder/file"
 	stdprometheus "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	jaegercfg "github.com/uber/jaeger-client-go/config"
@@ -30,14 +29,14 @@ import (
 
 func main() {
 	var (
-		flFileCA         = flag.String("fileca", envString("RESPONDER_FILE_CA", ""), "File CA")
-		flResponderKey   = flag.String("key", envString("RESPONDER_KEY", ""), "responder key")
-		flResponderCert  = flag.String("cert", envString("RESPONDER_CERT", ""), "responder certificate")
-		flDepotDBName    = flag.String("dbname", envString("RESPONDER_DB_NAME", "ca_store"), "DB name")
-		flDepotDBUser    = flag.String("dbuser", envString("RESPONDER_DB_USER", ""), "DB username")
-		flDepotPassword  = flag.String("dbpassword", envString("RESPONDER_DB_PASSWORD", ""), "DB password")
-		flDepotHost      = flag.String("dbhost", envString("RESPONDER_DB_HOST", ""), "DB host")
-		flDepotPort      = flag.String("dbport", envString("RESPONDER_DB_PORT", ""), "DB port")
+		flResponderKey  = flag.String("key", envString("RESPONDER_KEY", ""), "responder key")
+		flResponderCert = flag.String("cert", envString("RESPONDER_CERT", ""), "responder certificate")
+
+		flVaultRoleId   = flag.String("vaultRoleId", envString("RESPONDER_VAULT_ROLEID", ""), "Vault role ID")
+		flVaultSecretId = flag.String("vaultSecretId", envString("RESPONDER_VAULT_SECRETID", ""), "Vault secret ID")
+		flVaultCa       = flag.String("vaultCa", envString("RESPONDER_VAULT_CA", ""), "Vault CA file")
+		flVaultAddress  = flag.String("vaultAddress", envString("RESPONDER_VAULT_ADDRESS", ""), "Vault ADDRESS")
+
 		flConsulProtocol = flag.String("consulprotocol", envString("RESPONDER_CONSUL_PROTOCOL", ""), "Consul protocol")
 		flConsulHost     = flag.String("consulhost", envString("RESPONDER_CONSUL_HOST", ""), "Consul host")
 		flConsulPort     = flag.String("consulport", envString("RESPONDER_CONSUL_PORT", ""), "Consul port")
@@ -57,15 +56,8 @@ func main() {
 		logger = level.NewFilter(logger, level.AllowInfo())
 	}
 
-	caSecrets := cafile.NewFile(*flFileCA, logger)
 	respSecrets := file.NewFile(*flResponderKey, *flResponderCert, logger)
 
-	dataSourceName := "dbname=" + *flDepotDBName + " user=" + *flDepotDBUser + " password=" + *flDepotPassword + " host=" + *flDepotHost + " port=" + *flDepotPort + " sslmode=disable"
-	depot, err := relational.NewDB("postgres", dataSourceName, logger)
-	if err != nil {
-		level.Error(logger).Log("err", err, "msg", "Could not start connection with signed certificates database")
-		os.Exit(1)
-	}
 	level.Info(logger).Log("msg", "Connection established with signed certificates database")
 	jcfg, err := jaegercfg.FromEnv()
 	if err != nil {
@@ -82,9 +74,16 @@ func main() {
 	level.Info(logger).Log("msg", "Jaeger tracer started")
 	fieldKeys := []string{"method", "error"}
 
+	secretsVault, err := vault.NewVaultSecrets(*flVaultAddress, *flVaultRoleId, *flVaultSecretId, *flVaultCa, logger)
+	if err != nil {
+		level.Error(logger).Log("err", err, "msg", "Could not create vault secret")
+		os.Exit(1)
+	}
+	vaultService := secrets.NewVaultService(secretsVault)
+
 	var resp responder.Service
 	{
-		resp, err = responder.NewService(caSecrets, respSecrets, depot)
+		resp, err = responder.NewService(respSecrets, vaultService.Secrets)
 		if err != nil {
 			logger.Log("err", err)
 			os.Exit(1)
